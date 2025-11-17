@@ -1,11 +1,14 @@
+# Samba NAS Setup Guide
+
 ## Prerequisites
 - Ubuntu Server with root/sudo access
 - Network connectivity
 
 ---
 
-## 1. Installation
+## 1. Samba Installation
 
+### Install Samba package
 ```bash
 sudo apt update
 sudo apt install samba acl -y
@@ -172,6 +175,201 @@ getfacl /path/to/directory
 
 ---
 
+## 7. RAID Management (mdadm)
+
+### Check RAID Status
+```bash
+cat /proc/mdstat
+```
+Shows active RAID arrays and their member disks.
+
+### Check Mount Status
+```bash
+mount | grep STORAGE
+```
+Replace `STORAGE` with your mount point name.
+
+### Examine RAID Members
+```bash
+sudo mdadm --examine /dev/sda /dev/sdb /dev/sdc
+```
+Shows RAID metadata for each disk.
+
+### Stop RAID Before Power Off
+
+**Step 1:** Unmount the filesystem
+```bash
+sudo umount /mnt/STORAGE
+```
+
+**Step 2:** Stop RAID array
+```bash
+sudo mdadm --stop /dev/md0
+```
+
+**IMPORTANT:** Always unmount before stopping RAID to prevent data corruption.
+
+---
+
+## 8. RAID Recovery (After Power Loss)
+
+### Reassemble RAID Array
+```bash
+sudo mdadm --assemble --scan
+```
+Automatically detects and assembles RAID arrays.
+
+### Mount RAID Manually
+```bash
+sudo mount /dev/md0 /mnt/STORAGE
+```
+
+### Mount All (Using fstab)
+```bash
+sudo mount -a
+```
+
+### Set RAID to Read-Write Mode
+```bash
+sudo mdadm --readwrite /dev/md0
+```
+Use if array is stuck in read-only mode.
+
+---
+
+## 9. FACL (Advanced Permissions)
+
+### Basic FACL Syntax
+```bash
+sudo setfacl -m [target]:[name]:[permissions] /path/to/directory
+```
+
+**Target types:**
+- `u:username` - Specific user
+- `g:groupname` - Specific group
+- `o` - Others
+
+**Permissions:**
+- `r` - Read
+- `w` - Write
+- `x` - Execute
+
+### Example: Multi-Group Permission Setup
+
+**Scenario:** `/mnt/STORAGE/DEPARTMENTS/finance` folder needs:
+- IT team: Full access (rwx)
+- Finance team: Full access (rwx)
+- Accounting team: Read-only (r-x)
+- HR team: No access
+```bash
+# Set group ownership
+sudo chgrp it_team /mnt/STORAGE/DEPARTMENTS/finance
+sudo chmod 2775 /mnt/STORAGE/DEPARTMENTS/finance
+
+# Grant permissions to existing files/folders
+sudo setfacl -R -m g:it_team:rwx /mnt/STORAGE/DEPARTMENTS/finance
+sudo setfacl -R -m g:finance_team:rwx /mnt/STORAGE/DEPARTMENTS/finance
+sudo setfacl -R -m g:accounting_team:r-x /mnt/STORAGE/DEPARTMENTS/finance
+
+# Set default permissions for NEW files/folders
+sudo setfacl -R -m d:g:it_team:rwx /mnt/STORAGE/DEPARTMENTS/finance
+sudo setfacl -R -m d:g:finance_team:rwx /mnt/STORAGE/DEPARTMENTS/finance
+sudo setfacl -R -m d:g:accounting_team:r-x /mnt/STORAGE/DEPARTMENTS/finance
+```
+
+**Flags explained:**
+- `-R` : Recursive (apply to all files/folders inside)
+- `-m` : Modify ACL
+- `d:` : Default ACL (inherited by new files/folders)
+- `2775` : SetGID bit + rwxrwxr-x permissions
+
+### Verify FACL Permissions
+```bash
+getfacl /mnt/STORAGE/DEPARTMENTS/finance
+```
+
+### Remove FACL Entry
+```bash
+sudo setfacl -x g:groupname /path/to/directory
+```
+
+### Remove All FACL Entries
+```bash
+sudo setfacl -b /path/to/directory
+```
+
+---
+
+## 10. Process Management
+
+### Check Which Process is Using Directory
+```bash
+sudo fuser -m /mnt/STORAGE
+```
+
+### Force Kill Processes Using Directory
+```bash
+sudo fuser -km /mnt/STORAGE
+```
+**Warning:** This forcefully terminates processes. Use with caution.
+
+---
+
+## 11. Samba Configuration
+
+### Main Configuration File
+```bash
+sudo nano /etc/samba/smb.conf
+```
+
+### Legacy Windows Compatibility (Windows 7/XP)
+Add to `[global]` section:
+```ini
+[global]
+min protocol = NT1
+max protocol = SMB3
+ntlm auth = yes
+```
+
+**Note:** Only enable if you have legacy Windows clients. NT1 is outdated and less secure.
+
+### Restart Samba After Config Changes
+```bash
+sudo systemctl restart smbd
+sudo systemctl restart nmbd
+```
+
+### Test Samba Configuration
+```bash
+testparm
+```
+
+---
+
+## 12. Backup System
+
+### Backup Script Location
+```bash
+sudo nano /usr/local/bin/backup-raid.sh
+```
+
+### Edit Cronjob
+```bash
+sudo crontab -e
+```
+
+### View Backup Logs
+```bash
+tail -f /var/log/backup-raid.log
+```
+
+### View Last 50 Log Lines
+```bash
+tail -n 50 /var/log/backup-raid.log
+```
+
+---
+
 ## Quick Reference Commands
 
 | Task | Command |
@@ -186,6 +384,13 @@ getfacl /path/to/directory
 | List group members | `getent group group` |
 | Check user groups | `groups user` |
 | Delete group | `sudo groupdel group` |
+| Check RAID status | `cat /proc/mdstat` |
+| Stop RAID safely | `sudo umount /mnt/STORAGE && sudo mdadm --stop /dev/md0` |
+| Reassemble RAID | `sudo mdadm --assemble --scan` |
+| Apply FACL | `sudo setfacl -R -m g:group:rwx /path` |
+| Check FACL | `getfacl /path` |
+| Kill processes on mount | `sudo fuser -km /mnt/STORAGE` |
+| Restart Samba | `sudo systemctl restart smbd` |
 
 ---
 
@@ -194,4 +399,29 @@ getfacl /path/to/directory
 - **3000-3999**: Custom Samba groups (recommended)
 - **4000+**: Reserved for future use
 
-Example structure:
+## FACL Permission Examples
+
+### Read-Write Access
+```bash
+sudo setfacl -R -m g:team_rw:rwx /mnt/STORAGE/shared
+sudo setfacl -R -m d:g:team_rw:rwx /mnt/STORAGE/shared
+```
+
+### Read-Only Access
+```bash
+sudo setfacl -R -m g:team_ro:r-x /mnt/STORAGE/shared
+sudo setfacl -R -m d:g:team_ro:r-x /mnt/STORAGE/shared
+```
+
+### No Access (Hidden)
+Simply don't grant any permissions. Without execute permission on parent directory, folder won't be accessible or visible.
+
+---
+
+## Notes
+- Always unmount before stopping RAID array
+- Use `--assemble --scan` after unexpected shutdowns
+- FACL `d:` prefix is crucial for inheritance on new files
+- SetGID bit (2xxx) ensures new files inherit group ownership
+- Test permissions with different user accounts before deployment
+- Keep backup of `/etc/samba/smb.conf` before major changes
