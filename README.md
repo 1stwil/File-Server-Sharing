@@ -30,14 +30,30 @@ ORICO Multibay's hardware RAID controller doesn't offer enough flexibility for t
 ### Key Features
 
 ### Network File Sharing
-- **Samba**: SMB/CIFS protocol for cross-platform file access
-- **FACL**: Fine-grained permission management for multi-user access control
+- **Samba**: SMB/CIFS protocol for cross-platform file access over LAN
+- **FACL (File Access Control Lists)**: Advanced permission system beyond standard Unix permissions
 - **LAN-only access**: File sharing works within the same local network via Ethernet/WiFi
 - **No internet required**: Direct connection between devices on the same network
 
 **Network Requirements:**
 - Devices must be connected to the same local network (router/switch)
 - No remote access from outside network (by design for security)
+
+#### Advanced Permission Management with FACL
+Traditional Unix permissions (owner/group/others) are limited to 3 permission sets. FACL extends this with granular per-user and per-group control:
+
+**Example use cases:**
+- **Group X**: Read-only access to `/shared/reports`
+- **Group Y**: Read + Write access to `/shared/reports`
+- **Group Z**: No access (folder hidden from view)
+
+This allows multiple user groups to share the same storage with different permission levels per folder, all managed at the filesystem level.
+
+**Benefits over standard permissions:**
+- Multiple groups with different permissions on same directory
+- Per-user exceptions without creating new groups
+- Inherited permissions for new files/folders
+- Folder visibility control (hide folders from unauthorized users)
 
 #### Automated Backup System
 Built with `rsync` hardlink snapshots:
