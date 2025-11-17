@@ -1,5 +1,5 @@
 #!/bin/bash
-SOURCE="/mnt/JACO/"
+SOURCE="/mnt/SOURCE/"
 BACKUP_ROOT="/mnt/BACKUP/snapshots"
 DATE=$(date +%Y-%m-%d)
 LATEST_LINK="$BACKUP_ROOT/latest"
