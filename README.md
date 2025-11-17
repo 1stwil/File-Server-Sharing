@@ -2,7 +2,7 @@
 
 Internal file sharing server configuration using Orange Pi 5 Pro with software RAID and automated incremental backup system.
 
-## Hardware Specifications
+## Hardware that i use
 
 - **SBC**: Orange Pi 5 Pro
   - 8GB RAM
