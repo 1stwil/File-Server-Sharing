@@ -1,6 +1,6 @@
-# Orange Pi 5 Pro NAS Setup
+# File server sharing setup
 
-Personal NAS (Network Attached Storage) configuration using Orange Pi 5 Pro with software RAID and automated incremental backup system.
+Internal file sharing server configuration using Orange Pi 5 Pro with software RAID and automated incremental backup system.
 
 ## Hardware Specifications
 
@@ -9,7 +9,7 @@ Personal NAS (Network Attached Storage) configuration using Orange Pi 5 Pro with
   - 512GB NVMe SSD (OS Drive)
   - OS: Ubuntu Server (Joshua-Riek build)
 - **Storage Enclosure**: ORICO Multibay 8848RC3
-  - 3x SATA SSD configured
+  - 3x SATA SSD configured (i am using 512gb on each SATA)
 
 ## Storage Architecture
 
@@ -25,21 +25,26 @@ Using `mdadm` for software RAID management:
   - Hardlink-based incremental backups
 
 ### Why Software RAID?
-Hardware RAID controller dari ORICO Multibay terlalu rigid untuk kebutuhan setup kompleks. Software RAID memberikan fleksibilitas penuh untuk custom configuration dan troubleshooting.
+ORICO Multibay's hardware RAID controller doesn't offer enough flexibility for this custom setup. Software RAID gives complete control over configuration and makes troubleshooting easier.
 
-## Key Features
+### Key Features
 
-### Network File Sharing
+#### Network File Sharing
 - **Samba**: SMB/CIFS protocol for cross-platform file access
 - **FACL**: Fine-grained permission management for multi-user access control
 
-### Automated Backup System
+#### Automated Backup System
 Built with `rsync` hardlink snapshots:
-- **Daily automated backups** via cronjob
+- **Daily automated backups** via cronjob - no manual intervention required
 - **Incremental snapshots** using `--link-dest` (unchanged files are hardlinked, not duplicated)
 - **14-day rolling retention** with automatic cleanup
+- **Point-in-time recovery**: Restore accidentally deleted or modified files within 14-day window
 - **Space-efficient**: Only stores file deltas between snapshots
-- **Point-in-time recovery**: Each snapshot is a complete browsable directory
+
+#### RAID 1 Redundancy
+- **Real-time mirror protection**: If one SSD fails, data remains accessible from the other drive
+- **Hot-swappable recovery**: Replace failed drive without data loss or downtime
+- **Automatic rebuild**: RAID array syncs data to replacement drive automatically
 
 #### How It Works
 The backup system uses `rsync` with hardlinks to create space-efficient snapshots:
