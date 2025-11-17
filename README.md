@@ -29,9 +29,15 @@ ORICO Multibay's hardware RAID controller doesn't offer enough flexibility for t
 
 ### Key Features
 
-#### Network File Sharing
+### Network File Sharing
 - **Samba**: SMB/CIFS protocol for cross-platform file access
 - **FACL**: Fine-grained permission management for multi-user access control
+- **LAN-only access**: File sharing works within the same local network via Ethernet/WiFi
+- **No internet required**: Direct connection between devices on the same network
+
+**Network Requirements:**
+- Devices must be connected to the same local network (router/switch)
+- No remote access from outside network (by design for security)
 
 #### Automated Backup System
 Built with `rsync` hardlink snapshots:
