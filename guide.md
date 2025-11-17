@@ -176,6 +176,320 @@ getfacl /path/to/directory
 ---
 
 ## 7. RAID Management (mdadm)
+# RAID 1 Setup Guide (mdadm)
+
+Complete guide for setting up software RAID 1 on Ubuntu Server using mdadm.
+
+---
+
+## Prerequisites
+
+- Two identical (or similar size) drives
+- Ubuntu Server with root/sudo access
+- **WARNING:** This process will WIPE ALL DATA on the selected drives
+
+---
+
+## Step 1: Identify Available Disks
+
+List all available disks:
+```bash
+lsblk
+```
+
+Check detailed disk information:
+```bash
+sudo fdisk -l /dev/sda
+sudo fdisk -l /dev/sdb
+```
+
+**IMPORTANT:** 
+- Verify disk names (`/dev/sda`, `/dev/sdb`, etc.) - yours may differ
+- Ensure disks are empty or backup data first
+- Creating RAID will destroy all existing data
+
+---
+
+## Step 2: Create RAID 1 Array
+
+Create RAID 1 mirror with two drives:
+```bash
+sudo mdadm --create --verbose /dev/md0 \
+  --level=1 \
+  --raid-devices=2 \
+  /dev/sda /dev/sdb
+```
+
+**Command breakdown:**
+- `--create` : Create new RAID array
+- `--verbose` : Show detailed output
+- `/dev/md0` : RAID device name
+- `--level=1` : RAID 1 (mirror)
+- `--raid-devices=2` : Number of drives in array
+- `/dev/sda /dev/sdb` : The two drives to mirror
+
+**Confirmation prompt:**
+```
+Continue creating array? (y/n)
+```
+Type: `y`
+
+---
+
+## Step 3: Monitor RAID Synchronization
+
+Check sync status:
+```bash
+cat /proc/mdstat
+```
+
+**Expected output:**
+```
+md0 : active raid1 sdb[1] sda[0]
+      976762584 blocks super 1.2 [2/2] [UU]
+      [==>..................]  resync = 12.6% (123034432/976762584)
+```
+
+**Real-time monitoring:**
+```bash
+watch -n 1 cat /proc/mdstat
+```
+Press `Ctrl+C` to exit watch.
+
+**Note:** Initial sync can take several hours for large drives. This is normal.
+
+---
+
+## Step 4: Verify RAID Details
+
+Check detailed RAID information:
+```bash
+sudo mdadm --detail /dev/md0
+```
+
+**Output shows:**
+- RAID Level
+- Array Size
+- Number of Devices
+- Active Devices
+- Working Devices
+- State (clean, syncing, degraded)
+
+---
+
+## Step 5: Save RAID Configuration
+
+Scan and save RAID configuration:
+```bash
+sudo mdadm --detail --scan | sudo tee -a /etc/mdadm/mdadm.conf
+```
+
+Verify saved configuration:
+```bash
+cat /etc/mdadm/mdadm.conf
+```
+
+**Update initramfs (CRITICAL for boot):**
+```bash
+sudo update-initramfs -u
+```
+
+**Why this matters:** Without updating initramfs, RAID won't auto-assemble on boot.
+
+---
+
+## Step 6: Create Filesystem
+
+### Option A: Standard ext4
+```bash
+sudo mkfs.ext4 /dev/md0
+```
+
+### Option B: Optimized for NAS (Recommended)
+```bash
+sudo mkfs.ext4 -L STORAGE -m 0 -T largefile4 /dev/md0
+```
+
+**Flags explained:**
+- `-L STORAGE` : Label the filesystem
+- `-m 0` : Reserve 0% for root (default 5% wastes space on data drives)
+- `-T largefile4` : Optimize for large files
+
+**Example:** On 1TB drive, `-m 0` saves ~50GB of usable space.
+
+---
+
+## Step 7: Create Mount Point
+
+Create directory for mounting RAID:
+```bash
+sudo mkdir -p /mnt/STORAGE
+```
+
+---
+
+## Step 8: Mount RAID Array
+
+Mount the RAID device:
+```bash
+sudo mount /dev/md0 /mnt/STORAGE
+```
+
+Verify mount:
+```bash
+df -h | grep STORAGE
+mount | grep md0
+```
+
+---
+
+## Step 9: Configure Auto-Mount on Boot
+
+Backup current fstab:
+```bash
+sudo cp /etc/fstab /etc/fstab.backup
+```
+
+Add RAID to fstab:
+```bash
+echo '/dev/md0 /mnt/STORAGE ext4 defaults,nofail 0 2' | sudo tee -a /etc/fstab
+```
+
+**fstab options explained:**
+- `defaults` : Standard mount options
+- `nofail` : System boots even if RAID fails to mount
+- `0` : No dump backup
+- `2` : Filesystem check order (after root filesystem)
+
+Test fstab configuration:
+```bash
+sudo umount /mnt/STORAGE
+sudo mount -a
+```
+
+Verify successful mount:
+```bash
+df -h | grep STORAGE
+```
+
+---
+
+## Step 10: Set Initial Permissions
+
+Set root ownership:
+```bash
+sudo chown root:root /mnt/STORAGE
+sudo chmod 755 /mnt/STORAGE
+```
+
+Create initial directory structure:
+```bash
+sudo mkdir -p /mnt/STORAGE/shared
+sudo mkdir -p /mnt/STORAGE/departments
+sudo mkdir -p /mnt/STORAGE/backups
+```
+
+---
+
+## Verification Checklist
+
+Run these commands to verify successful setup:
+
+### Check RAID status
+```bash
+cat /proc/mdstat
+```
+Expected: `[UU]` indicates both drives active
+
+### Check RAID details
+```bash
+sudo mdadm --detail /dev/md0
+```
+Expected: State should be `clean`
+
+### Check filesystem and space
+```bash
+df -h | grep STORAGE
+```
+
+### Check mount options
+```bash
+mount | grep md0
+```
+
+### Verify fstab entry
+```bash
+grep md0 /etc/fstab
+```
+
+### Test reboot persistence
+```bash
+sudo reboot
+```
+After reboot, verify mount:
+```bash
+df -h | grep STORAGE
+```
+
+---
+
+## Common Issues & Troubleshooting
+
+### RAID not auto-assembling on boot
+```bash
+# Reassemble manually
+sudo mdadm --assemble --scan
+
+# Check if mdadm.conf is configured
+cat /etc/mdadm/mdadm.conf
+
+# Update initramfs
+sudo update-initramfs -u
+```
+
+### Check for RAID errors
+```bash
+sudo mdadm --detail /dev/md0 | grep -i error
+```
+
+### Force RAID read-write mode
+```bash
+sudo mdadm --readwrite /dev/md0
+```
+
+### One drive failed - check status
+```bash
+cat /proc/mdstat
+sudo mdadm --detail /dev/md0
+```
+
+---
+
+## Important Notes
+
+1. **Disk identification:** Always verify disk names with `lsblk` before creating array. Using wrong disks will cause data loss.
+
+2. **Sync time:** Initial synchronization can take 4-12 hours depending on drive size. Don't interrupt this process.
+
+3. **Reserved space (`-m 0`):** Default ext4 reserves 5% for root. On data drives, this wastes space. Use `-m 0` to reclaim it.
+
+4. **`nofail` option:** Prevents boot failure if RAID has issues. System will boot normally, and you can troubleshoot RAID separately.
+
+5. **initramfs update:** CRITICAL step. Skip this and RAID won't auto-assemble on boot.
+
+6. **Monitoring:** Regularly check RAID status with `cat /proc/mdstat` to catch drive failures early.
+
+---
+
+## Next Steps
+
+After RAID setup is complete:
+1. Configure Samba for network sharing
+2. Set up FACL for advanced permissions
+3. Configure automated backups
+4. Set up monitoring/alerts for RAID health
+
+---
 
 ### Check RAID Status
 ```bash
