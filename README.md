@@ -77,3 +77,7 @@ Located at `/usr/local/bin/backup-raid.sh`:
 - Automatic cleanup of expired snapshots
 
 ### Cronjob Schedule
+```
+0 20 * * * /usr/local/bin/backup-raid.sh
+```
+Runs daily at 20:00 (8:00 PM). Adjust the hour field as needed for your preferred backup time.
